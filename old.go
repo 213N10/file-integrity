@@ -7,7 +7,7 @@ import (
 	//"gopkg.in/yaml.v3"
 	"github.com/fsnotify/fsnotify"
 )
-
+//szybkie dodanie komentarza w ramach przetestowania pewnej ciekawostki )))
 
 type Config1 struct {
     FolderPath       string
