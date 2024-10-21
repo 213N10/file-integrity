@@ -8,6 +8,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 //szybkie dodanie komentarza w ramach przetestowania pewnej ciekawostki )))
+//test wsl2
 
 type Config1 struct {
     FolderPath       string
