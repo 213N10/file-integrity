@@ -1,3 +1,26 @@
-log_file: "./logs.log"
-folders:
-  
+- folder_path: "/home/janek/niestudia"
+  number_of_watchers: 1
+  important_files:
+    - "important1"
+    - "important2"
+  operations_to_watch:
+    - "create"
+    - "write"
+
+- folder_path: "/home/janek/studia"
+  number_of_watchers: 1
+  important_files:
+    - "important3"
+    - "important4"
+  operations_to_watch:
+    - "remove"
+    - "rename"
+    - "create"
+    - "write"
+
+- folder_path: "/home/janek/test"
+  number_of_watchers: 1
+  important_files:
+    - "test"
+  operations_to_watch:
+    - "create"

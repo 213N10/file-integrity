@@ -1,89 +1,119 @@
 package main
 
 import (
-    "fmt"
-    "log"
-    "os"
-    "github.com/fsnotify/fsnotify"
-    "sync"
+	"fmt"
+	"github.com/fsnotify/fsnotify"
+	"gopkg.in/yaml.v3"
+	"log"
+	"os"
+	"sync"
 )
 
 type Config struct {
-    FolderPath       string
-    NumberOfWatchers int
-    BannedFiles      []string
-    ImportantFiles   []string
-    OperationsToWatch []fsnotify.Op
+	FolderPath                 string   `yaml:"folder_path"`
+	NumberOfWatchers           int      `yaml:"number_of_watchers"`
+	ImportantFiles             []string `yaml:"important_files"`
+	OperationsToWatch          []string `yaml:"operations_to_watch"`
+	OperationsToWatchProcessed []fsnotify.Op
+}
+
+var opMapping = map[string]fsnotify.Op{
+	"create": fsnotify.Create,
+	"write":  fsnotify.Write,
+	"remove": fsnotify.Remove,
+	"rename": fsnotify.Rename,
+}
+
+// Funkcja do konwersji operacji ze stringów do fsnotify.Op
+func convertOps(ops []string) ([]fsnotify.Op, error) {
+	var result []fsnotify.Op
+	for _, op := range ops {
+		mappedOp, exists := opMapping[op]
+		if !exists {
+			return nil, fmt.Errorf("unknown operation: %s", op)
+		}
+		result = append(result, mappedOp)
+	}
+	return result, nil
+}
+
+// Funkcja przetwarzająca konfigurację i konwertująca operacje na []fsnotify.Op
+func processConfig(configs []Config) error {
+	for i, config := range configs {
+		ops, err := convertOps(config.OperationsToWatch)
+		if err != nil {
+			return err
+		}
+		// Przypisz wynikowe []fsnotify.Op do pola Ops
+		configs[i].OperationsToWatchProcessed = ops
+	}
+	return nil
 }
 
 func main() {
+	// Wczytaj plik YAML
+	file, err := os.ReadFile("config.yaml")
+	if err != nil {
+		log.Fatalf("cannot read file: %v", err)
+	}
 
-    var wg sync.WaitGroup
+	// Parsuj plik YAML
+	var configs []Config
+	err = yaml.Unmarshal(file, &configs)
+	if err != nil {
+		log.Fatalf("cannot unmarshal yaml: %v", err)
+	}
 
-    configs := []Config{
-        {
-            FolderPath:       "/home/janek/niestudia",
-            NumberOfWatchers: 1,
-            BannedFiles:      []string{"file1", "file2"},
-            ImportantFiles:   []string{"important1", "important2"},
-            OperationsToWatch: []fsnotify.Op{fsnotify.Create, fsnotify.Write},
-        },
-        {
-            FolderPath:       "/home/janek/studia",
-            NumberOfWatchers: 1,
-            BannedFiles:      []string{"file3", "file4"},
-            ImportantFiles:   []string{"important3", "important4"},
-            OperationsToWatch: []fsnotify.Op{fsnotify.Remove, fsnotify.Rename, fsnotify.Create, fsnotify.Write},
-        },
-    }
+	// Konwertuj operacje na []fsnotify.Op
+	err = processConfig(configs)
+	if err != nil {
+		log.Fatalf("error processing config: %v", err)
+	}
 
-    for _, config := range configs {
-        wg.Add(1)
+	var wg sync.WaitGroup
 
-        go func(config Config) {
-            defer wg.Done()
-            watcher, err := fsnotify.NewWatcher()
-            if err != nil {
-                fmt.Println("Error: ", err)
-                os.Exit(1)
-            }
-            defer watcher.Close()
+	for _, config := range configs {
 
-            var isbannedEmpty bool = len(config.BannedFiles) == 0
-            var isImportantEmpty bool = len(config.ImportantFiles) == 0 
-            if isbannedEmpty && isImportantEmpty {
-                log.Println("elo")
-            }
+		wg.Add(1)
 
-            // Dodaj folder do watchera
-            err = watcher.Add(config.FolderPath)
-            if err != nil {
-                log.Fatal(err)
-            }
+		go func(config Config) {
+			defer wg.Done()
+			watcher, err := fsnotify.NewWatcher()
+			if err != nil {
+				fmt.Println("Error: ", err)
+				os.Exit(1)
+			}
+			defer watcher.Close()
 
-            for {
-                select {
-                case event, ok := <-watcher.Events:
-                    if !ok {
-                        return
-                    }
-                    log.Println("Event: ", event)
-                    for _, op := range config.OperationsToWatch {
-                        if event.Op.Has(op) {
-                            log.Println("Operation matched: ", op)
-                            // Dodaj dodatkową logikę dla banned i important files tutaj
-                        }
-                    }
-                case err, ok := <-watcher.Errors:
-                    if !ok {
-                        return
-                    }
-                    log.Println("error:", err)
-                }
-            }
-        }(config)
-    }
+			// Dodaj folder do watchera
+			err = watcher.Add(config.FolderPath)
+			if err != nil {
+				log.Fatal(err)
+			}
 
-    // Poczekaj na zakończenie wszystkich gorutyn
-    wg.Wait()
+			for {
+				select {
+				case event, ok := <-watcher.Events:
+					if !ok {
+						return
+					}
+					log.Println("Event: ", event)
+					for _, op := range config.OperationsToWatchProcessed {
+						if event.Op.Has(op) {
+							log.Println("Operation matched: ", op)
+							// Dodaj dodatkową logikę dla banned i important files tutaj
+						}
+					}
+				case err, ok := <-watcher.Errors:
+					if !ok {
+						return
+					}
+					log.Println("error:", err)
+				}
+			}
+		}(config)
+	}
+
+	// Poczekaj na zakończenie wszystkich gorutyn
+	wg.Wait()
 }
