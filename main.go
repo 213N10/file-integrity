@@ -6,49 +6,9 @@ import (
 	"gopkg.in/yaml.v3"
 	"log"
 	"os"
+	"path/filepath"
 	"sync"
 )
-
-type Config struct {
-	FolderPath                 string   `yaml:"folder_path"`
-	NumberOfWatchers           int      `yaml:"number_of_watchers"`
-	ImportantFiles             []string `yaml:"important_files"`
-	OperationsToWatch          []string `yaml:"operations_to_watch"`
-	OperationsToWatchProcessed []fsnotify.Op
-}
-
-var opMapping = map[string]fsnotify.Op{
-	"create": fsnotify.Create,
-	"write":  fsnotify.Write,
-	"remove": fsnotify.Remove,
-	"rename": fsnotify.Rename,
-}
-
-// Funkcja do konwersji operacji ze stringów do fsnotify.Op
-func convertOps(ops []string) ([]fsnotify.Op, error) {
-	var result []fsnotify.Op
-	for _, op := range ops {
-		mappedOp, exists := opMapping[op]
-		if !exists {
-			return nil, fmt.Errorf("unknown operation: %s", op)
-		}
-		result = append(result, mappedOp)
-	}
-	return result, nil
-}
-
-// Funkcja przetwarzająca konfigurację i konwertująca operacje na []fsnotify.Op
-func processConfig(configs []Config) error {
-	for i, config := range configs {
-		ops, err := convertOps(config.OperationsToWatch)
-		if err != nil {
-			return err
-		}
-		// Przypisz wynikowe []fsnotify.Op do pola Ops
-		configs[i].OperationsToWatchProcessed = ops
-	}
-	return nil
-}
 
 func main() {
 	// Wczytaj plik YAML
@@ -58,25 +18,25 @@ func main() {
 	}
 
 	// Parsuj plik YAML
-	var configs []Config
+	var configs Config
 	err = yaml.Unmarshal(file, &configs)
 	if err != nil {
 		log.Fatalf("cannot unmarshal yaml: %v", err)
 	}
 
 	// Konwertuj operacje na []fsnotify.Op
-	err = processConfig(configs)
+	err = processConfig(configs.Folders)
 	if err != nil {
 		log.Fatalf("error processing config: %v", err)
 	}
 
 	var wg sync.WaitGroup
 
-	for _, config := range configs {
+	for _, folder := range configs.Folders {
 
 		wg.Add(1)
 
-		go func(config Config) {
+		go func(folder Folder) {
 			defer wg.Done()
 			watcher, err := fsnotify.NewWatcher()
 			if err != nil {
@@ -86,9 +46,9 @@ func main() {
 			defer watcher.Close()
 
 			// Dodaj folder do watchera
-			err = watcher.Add(config.FolderPath)
+			err = watcher.Add(folder.FolderPath)
 			if err != nil {
-				log.Fatal(err)
+				log.Fatalf("Error: %v in path %v", err, folder.FolderPath)
 			}
 
 			for {
@@ -97,11 +57,17 @@ func main() {
 					if !ok {
 						return
 					}
-					log.Println("Event: ", event)
-					for _, op := range config.OperationsToWatchProcessed {
+					//log.Println("Event: ", event)
+					for _, op := range folder.OperationsToWatchProcessed {
 						if event.Op.Has(op) {
-							log.Println("Operation matched: ", op)
+							//log.Println("Operation matched: ", op)
 							// Dodaj dodatkową logikę dla banned i important files tutaj
+							//event.name tp ścieżka jak wziać nazwe pliku
+							for _, file := range folder.ImportantFiles {
+								if filepath.Base(event.Name) == file {
+									log.Printf("Successfully detected %v on %v", event.Op, file)
+								}
+							}
 						}
 					}
 				case err, ok := <-watcher.Errors:
@@ -111,7 +77,7 @@ func main() {
 					log.Println("error:", err)
 				}
 			}
-		}(config)
+		}(folder)
 	}
 
 	// Poczekaj na zakończenie wszystkich gorutyn
