@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"github.com/fsnotify/fsnotify"
 	"gopkg.in/yaml.v3"
 	"log"
@@ -12,22 +11,29 @@ import (
 
 func main() {
 	// Wczytaj plik YAML
-	file, err := os.ReadFile("config.yaml")
+	configFile, err := os.ReadFile("config.yaml")
 	if err != nil {
 		log.Fatalf("cannot read file: %v", err)
 	}
 
 	// Parsuj plik YAML
 	var configs Config
-	err = yaml.Unmarshal(file, &configs)
+	err = yaml.Unmarshal(configFile, &configs)
 	if err != nil {
 		log.Fatalf("cannot unmarshal yaml: %v", err)
 	}
 
+	logFile, err := os.OpenFile(configs.LogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err!=nil {
+		log.Fatalf("Couldnt open the log file: %v", err)
+	}
+	defer logFile.Close()
+	logger := log.New(logFile, "", log.LstdFlags)
+
 	// Konwertuj operacje na []fsnotify.Op
 	err = processConfig(configs.Folders)
 	if err != nil {
-		log.Fatalf("error processing config: %v", err)
+		logger.Fatalf("error processing config: %v", err)
 	}
 
 	var wg sync.WaitGroup
@@ -40,7 +46,7 @@ func main() {
 			defer wg.Done()
 			watcher, err := fsnotify.NewWatcher()
 			if err != nil {
-				fmt.Println("Error: ", err)
+				logger.Println("Error: ", err)
 				os.Exit(1)
 			}
 			defer watcher.Close()
@@ -48,7 +54,7 @@ func main() {
 			// Dodaj folder do watchera
 			err = watcher.Add(folder.FolderPath)
 			if err != nil {
-				log.Fatalf("Error: %v in path %v", err, folder.FolderPath)
+				logger.Fatalf("Error: %v in path %v", err, folder.FolderPath)
 			}
 
 			for {
@@ -60,12 +66,9 @@ func main() {
 					//log.Println("Event: ", event)
 					for _, op := range folder.OperationsToWatchProcessed {
 						if event.Op.Has(op) {
-							//log.Println("Operation matched: ", op)
-							// Dodaj dodatkową logikę dla banned i important files tutaj
-							//event.name tp ścieżka jak wziać nazwe pliku
 							for _, file := range folder.ImportantFiles {
 								if filepath.Base(event.Name) == file {
-									log.Printf("Successfully detected %v on %v", event.Op, file)
+									logger.Printf("Successfully detected %v on %v", event.Op, file)
 								}
 							}
 						}
@@ -74,7 +77,7 @@ func main() {
 					if !ok {
 						return
 					}
-					log.Println("error:", err)
+					logger.Println("error:", err)
 				}
 			}
 		}(folder)
@@ -83,3 +86,11 @@ func main() {
 	// Poczekaj na zakończenie wszystkich gorutyn
 	wg.Wait()
 }
+
+/*func logEvents(eventsChan chan fsnotify.Event){
+	file, err := os.OpenFile("events.log",os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+}*/

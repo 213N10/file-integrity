@@ -1,4 +1,4 @@
-log_path: "/home/janek/logs/application.log"
+log_path: "logs/application.log"
 folders:
 - folder_path: "/home/janek/niestudia"
   number_of_watchers: 1
