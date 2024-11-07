@@ -1,12 +1,14 @@
 package main
 
 import (
-	"github.com/fsnotify/fsnotify"
-	"gopkg.in/yaml.v3"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 	"sync"
+
+	"github.com/fsnotify/fsnotify"
+	"gopkg.in/yaml.v3"
 )
 
 func main() {
@@ -24,11 +26,15 @@ func main() {
 	}
 
 	logFile, err := os.OpenFile(configs.LogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err!=nil {
+	if err != nil {
 		log.Fatalf("Couldnt open the log file: %v", err)
 	}
 	defer logFile.Close()
 	logger := log.New(logFile, "", log.LstdFlags)
+
+	eventsChan := make(chan string)
+
+	go logEvents(eventsChan, logger)
 
 	// Konwertuj operacje na []fsnotify.Op
 	err = processConfig(configs.Folders)
@@ -46,7 +52,7 @@ func main() {
 			defer wg.Done()
 			watcher, err := fsnotify.NewWatcher()
 			if err != nil {
-				logger.Println("Error: ", err)
+				eventsChan <- fmt.Sprintf("Error: %v", err)
 				os.Exit(1)
 			}
 			defer watcher.Close()
@@ -54,7 +60,7 @@ func main() {
 			// Dodaj folder do watchera
 			err = watcher.Add(folder.FolderPath)
 			if err != nil {
-				logger.Fatalf("Error: %v in path %v", err, folder.FolderPath)
+				eventsChan <- fmt.Sprintf("Error: %v in path %v", err, folder.FolderPath)
 			}
 
 			for {
@@ -68,7 +74,7 @@ func main() {
 						if event.Op.Has(op) {
 							for _, file := range folder.ImportantFiles {
 								if filepath.Base(event.Name) == file {
-									logger.Printf("Successfully detected %v on %v", event.Op, file)
+									eventsChan <- fmt.Sprintf("Successfully detected %v on %v", event.Op, file)
 								}
 							}
 						}
@@ -77,7 +83,7 @@ func main() {
 					if !ok {
 						return
 					}
-					logger.Println("error:", err)
+					eventsChan <- fmt.Sprintf("error: %v", err)
 				}
 			}
 		}(folder)
@@ -85,12 +91,11 @@ func main() {
 
 	// Poczekaj na zakończenie wszystkich gorutyn
 	wg.Wait()
+	close(eventsChan)
 }
 
-/*func logEvents(eventsChan chan fsnotify.Event){
-	file, err := os.OpenFile("events.log",os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		log.Fatal(err)
+func logEvents(eventsChan chan string, logger *log.Logger) {
+	for event := range eventsChan {
+		logger.Println(event)
 	}
-	defer file.Close()
-}*/
+}
