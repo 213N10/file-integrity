@@ -7,7 +7,6 @@ import (
 
 type Folder struct {
 	FolderPath                 string   `yaml:"folder_path"`
-	NumberOfWatchers           int      `yaml:"number_of_watchers"`
 	ImportantFiles             []string `yaml:"important_files"`
 	OperationsToWatch          []string `yaml:"operations_to_watch"`
 	OperationsToWatchProcessed []fsnotify.Op
