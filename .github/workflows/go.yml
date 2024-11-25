@@ -27,7 +27,7 @@ jobs:
         run: |
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o file-integrity -v ./...
 
-      - name: Create Tag: vYEAR.MONTH.NUMBER
+      - name: Create Tag vYEAR.MONTH.NUMBER
         run: |
           git fetch --tags
 
