@@ -24,7 +24,7 @@ folders:
   operations_to_watch:
     - "create"
 
-- folder_path: "/etc/test"
+- folder_path: "/etc/test3435"
   important_files:
   operations_to_watch:
     - "create"

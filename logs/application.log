@@ -22,3 +22,4 @@ ERROR 2024/11/10 21:38:51 Successfully detected REMOVE on /home/janek/.zsh_histo
 ERROR 2024/11/10 21:38:51 Successfully detected WRITE on /home/janek/test.go
 ERROR 2024/11/10 21:41:39 Successfully detected CREATE on /etc/test/plik_testowy.conf
 ERROR 2024/11/10 21:42:07 Successfully detected REMOVE on /etc/test/plik_testowy.conf
+ERROR 2024/11/24 23:11:02 Error: no such file or directory in path /etc/test3435. Closing thread.
