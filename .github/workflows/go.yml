@@ -9,7 +9,6 @@ jobs:
   go:
     runs-on: ubuntu-latest
     permissions:
-      actions: write
       contents: write
 
     steps:
@@ -65,5 +64,4 @@ jobs:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: ./file-integrity
           asset_name: file-integrity
-          # chyba niepotrzbne
-          # asset_content_type: application/octet-stream
+          asset_content_type: application/octet-stream
