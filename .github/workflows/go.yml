@@ -35,7 +35,7 @@ jobs:
           git fetch --tags
 
           YEAR_MONTH=v$(date +'%Y.%m')
-          NUM_EXISTING_TAGS=$(git tag -l "v${YEAR_MONTH}.*" | wc -l)
+          NUM_EXISTING_TAGS=$(git tag -l "${YEAR_MONTH}.*" | wc -l)
           NTH_BUILD=$((NUM_EXISTING_TAGS + 1))
           TAG_NAME="${YEAR_MONTH}.${NTH_BUILD}"
 
