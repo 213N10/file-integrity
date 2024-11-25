@@ -1,79 +1,65 @@
-name: Go
+name: Create release
 
 on:
   push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
-
-permissions:
-  contents: write  # Przyznaje uprawnienia do zapisu w zakresie treści
+    branches: [ "main", "master" ]
 
 jobs:
 
-  build:
+  go:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # potrzebujemy całej historii
 
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
           go-version: '1.22.x'
-        
+
       - name: Install dependencies
         run: |
           go mod tidy
           go mod download
 
       - name: Build
-        run: | 
+        run: |
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o file-integrity -v ./...
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      - name: Create Tag: vYEAR.MONTH.NUMBER
+        run: |
+          git fetch --tags
+
+          YEAR_MONTH=v$(date +'%Y.%m')
+          NUM_EXISTING_TAGS=$(git tag -l "v${YEAR_MONTH}.*" | wc -l)
+          NTH_BUILD=$((NUM_EXISTING_TAGS + 1))
+          TAG_NAME="${YEAR_MONTH}.${NTH_BUILD}"
+
+          echo "TAG_NAME=${TAG_NAME}" >> $GITHUB_ENV
+          git tag "${TAG_NAME}"
+          git push origin "${TAG_NAME}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          name: file-integrity
-          path: ./file-integrity
+          tag_name: ${{ env.TAG_NAME }}
+          release_name: Release ${{ env.TAG_NAME }}
+          draft: false
+          prerelease: false
 
-  release: 
-    runs-on: ubuntu-latest 
-    needs: build 
-    steps: 
-      - name: Download artifact 
-        uses: actions/download-artifact@v4 
-        with: 
-          name: file-integrity
-
-      - name: Create Tag 
-        id: create_tag
-        run: | 
-          TAG_NAME=v$(date +'%Y%m%d%H%M%S') 
-          echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
-          git tag $TAG_NAME 
-          git push origin $TAG_NAME 
-        env: 
-          GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }} 
-
-      - name: Create Release 
-        id: create_release 
-        uses: actions/create-release@v1 
-        env: 
-          GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }} 
-        with: 
-          tag_name: ${{ env.TAG_NAME }} 
-          release_name: Release ${{ env.TAG_NAME }} 
-          draft: false 
-          prerelease: false 
-
-      - name: Upload Release Asset 
-        uses: actions/upload-release-asset@v1 
-        env: 
-          GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }} 
-        with: 
-          upload_url: ${{ steps.create_release.outputs.upload_url }} 
-          asset_path: ./file-integrity 
-          asset_name: file-integrity 
-          asset_content_type: application/octet-stream
-
-
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./file-integrity
+          asset_name: file-integrity
+          # chyba niepotrzbne
+          # asset_content_type: application/octet-stream
