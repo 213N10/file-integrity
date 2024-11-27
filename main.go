@@ -2,19 +2,26 @@ package main
 
 import (
 	"fmt"
-	"github.com/fsnotify/fsnotify"
-	"gopkg.in/yaml.v3"
 	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sync"
+
+	"github.com/fsnotify/fsnotify"
+	"gopkg.in/yaml.v3"
 )
+
+type LogMessage struct {
+	Level   slog.Level
+	Message string
+}
 
 func main() {
 	configFilePath := getConfigFile()
 	configFile, err := os.ReadFile(configFilePath)
 	if err != nil {
-		text_message := "check whether you set up env variable 'FILE-INTEGRITY_CONFIG_FILEPATH' or have '/etc/file-integrity/config.yaml'"
+		text_message := "check whether you set up env variable 'FILE_INTEGRITY_CONFIG_FILEPATH' or have '/etc/file-integrity/config.yaml'"
 		log.Fatalf("cannot read file config file: %v\n%v", err, text_message)
 	}
 
@@ -29,15 +36,25 @@ func main() {
 		log.Fatalf("Couldnt open the log file: %v", err)
 	}
 	defer logFile.Close()
-	logger := log.New(logFile, "ERROR ", log.LstdFlags)
 
-	eventsChan := make(chan string)
+	var logLevel slog.Level
+	logLevel, err = convertLogLevel(configs.LogLevel)
+	if err != nil {
+		log.Println("Did not find valid log level. Defaulting to INFO...")
+		logLevel = slog.LevelInfo
+	}
+	logger := setupLogger(configs.LogPath, logLevel, configs.LogFormat)
+	eventsChan := make(chan LogMessage)
 
 	go logEvents(eventsChan, logger)
 
 	err = processConfig(configs.Folders)
 	if err != nil {
-		logger.Fatalf("error processing folder data: %v", err)
+		eventsChan <- LogMessage{
+			Level:   slog.LevelError,
+			Message: fmt.Sprintf("Error processing folder data: %v. Closing program.", err),
+		}
+		os.Exit(1)
 	}
 
 	var wg sync.WaitGroup
@@ -50,14 +67,22 @@ func main() {
 			defer wg.Done()
 			watcher, err := fsnotify.NewWatcher()
 			if err != nil {
-				eventsChan <- fmt.Sprintf("Error: %v. Closing thread.", err)
+				eventsChan <- LogMessage{
+					Level:   slog.LevelError,
+					Message: fmt.Sprintf("Watcher error occurred for folder %v: %v. Closing thread.", folder.FolderPath, err),
+				}
 				return
 			}
 			defer watcher.Close()
 
 			err = watcher.Add(folder.FolderPath)
 			if err != nil {
-				eventsChan <- fmt.Sprintf("Error: %v in path %v. Closing thread.", err, folder.FolderPath)
+
+				eventsChan <- LogMessage{
+					Level:   slog.LevelError,
+					Message: fmt.Sprintf("Error: %v in path %v. Closing thread.", err, folder.FolderPath),
+				}
+
 				return
 			}
 
@@ -80,7 +105,10 @@ func main() {
 							if event.Op.Has(op) {
 								for _, file := range folder.ImportantFiles {
 									if filepath.Base(event.Name) == file {
-										eventsChan <- fmt.Sprintf("Successfully detected %v on %v", event.Op, file)
+										eventsChan <- LogMessage{
+											Level:   slog.LevelError,
+											Message: fmt.Sprintf("Successfully detected %v on %v", event.Op, file),
+										}
 										break
 									}
 								}
@@ -89,7 +117,10 @@ func main() {
 					case 2:
 						for _, op := range folder.OperationsToWatchProcessed {
 							if event.Op.Has(op) {
-								eventsChan <- fmt.Sprintf("Successfully detected %v on %v", event.Op, event.Name)
+								eventsChan <- LogMessage{
+									Level:   slog.LevelError,
+									Message: fmt.Sprintf("Successfully detected %v on %v", event.Op, event.Name),
+								}
 							}
 						}
 					}
@@ -97,7 +128,10 @@ func main() {
 					if !ok {
 						return
 					}
-					eventsChan <- fmt.Sprintf("error: %v", err)
+					eventsChan <- LogMessage{
+						Level:   slog.LevelError,
+						Message: fmt.Sprintf("Error: %v", err),
+					}
 				}
 			}
 		}(folder)
@@ -107,9 +141,20 @@ func main() {
 	close(eventsChan)
 }
 
-func logEvents(eventsChan chan string, logger *log.Logger) {
-	for event := range eventsChan {
-		logger.Println(event)
+func logEvents(eventsChan chan LogMessage, logger *slog.Logger) {
+	for logMsg := range eventsChan {
+		switch logMsg.Level {
+		case slog.LevelDebug:
+			logger.Debug(logMsg.Message)
+		case slog.LevelInfo:
+			logger.Info(logMsg.Message)
+		case slog.LevelWarn:
+			logger.Warn(logMsg.Message)
+		case slog.LevelError:
+			logger.Error(logMsg.Message)
+		default:
+			logger.Info(logMsg.Message)
+		}
 	}
 }
 
@@ -119,4 +164,26 @@ func getConfigFile() string {
 		config_path = "etc/file-integrity/config.yaml"
 	}
 	return config_path
+}
+
+func setupLogger(logFilePath string, logLevel slog.Level, format string) *slog.Logger {
+	logFile, err := os.OpenFile(logFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		fmt.Printf("Couldn't open the log file: %v\n", err)
+		os.Exit(1)
+	}
+
+	var handler slog.Handler
+
+	switch format {
+	case "json":
+		handler = slog.NewJSONHandler(logFile, &slog.HandlerOptions{Level: logLevel})
+	case "text":
+		handler = slog.NewTextHandler(logFile, &slog.HandlerOptions{Level: logLevel})
+	default:
+		fmt.Printf("Unsupported log format: %v. Defaulting to JSON.\n", format)
+		handler = slog.NewJSONHandler(logFile, &slog.HandlerOptions{Level: logLevel})
+	}
+
+	return slog.New(handler)
 }

@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
+
 	"github.com/fsnotify/fsnotify"
 )
 
@@ -13,8 +15,10 @@ type Folder struct {
 }
 
 type Config struct {
-	LogPath string   `yaml:"log_path"`
-	Folders []Folder `yaml:"folders"`
+	LogPath   string   `yaml:"log_path"`
+	LogLevel  string   `yaml:"log_level"`
+	LogFormat string   `yaml:"log_format"`
+	Folders   []Folder `yaml:"folders"`
 }
 
 var opMapping = map[string]fsnotify.Op{
@@ -22,6 +26,13 @@ var opMapping = map[string]fsnotify.Op{
 	"write":  fsnotify.Write,
 	"remove": fsnotify.Remove,
 	"rename": fsnotify.Rename,
+}
+
+var logLevelMapping = map[string]slog.Level{
+	"debug":   slog.LevelDebug,
+	"info":    slog.LevelInfo,
+	"warning": slog.LevelWarn,
+	"error":   slog.LevelError,
 }
 
 // Funkcja do konwersji operacji ze stringów do fsnotify.Op
@@ -35,6 +46,14 @@ func convertOps(ops []string) ([]fsnotify.Op, error) {
 		result = append(result, mappedOp)
 	}
 	return result, nil
+}
+
+func convertLogLevel(level string) (slog.Level, error) {
+	mappedLevel, exists := logLevelMapping[level]
+	if !exists {
+		return slog.Level(0), fmt.Errorf("unknown log level: %s", level)
+	}
+	return mappedLevel, nil
 }
 
 // Funkcja przetwarzająca konfigurację i konwertująca operacje na []fsnotify.Op

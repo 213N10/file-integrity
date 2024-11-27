@@ -23,3 +23,9 @@ ERROR 2024/11/10 21:38:51 Successfully detected WRITE on /home/janek/test.go
 ERROR 2024/11/10 21:41:39 Successfully detected CREATE on /etc/test/plik_testowy.conf
 ERROR 2024/11/10 21:42:07 Successfully detected REMOVE on /etc/test/plik_testowy.conf
 ERROR 2024/11/24 23:11:02 Error: no such file or directory in path /etc/test3435. Closing thread.
+{"time":"2024-11-27T20:19:19.931651295+01:00","level":"ERROR","msg":"Error: no such file or directory in path /etc/test3435. Closing thread."}
+{"time":"2024-11-27T20:19:51.961015095+01:00","level":"ERROR","msg":"Successfully detected WRITE on important3"}
+{"time":"2024-11-27T20:27:01.216603991+01:00","level":"ERROR","msg":"Error: no such file or directory in path /etc/test3435. Closing thread."}
+time=2024-11-27T20:27:38.300+01:00 level=ERROR msg="Error: no such file or directory in path /etc/test3435. Closing thread."
+time=2024-11-27T20:50:26.177+01:00 level=ERROR msg="Error: no such file or directory in path /etc/test3435. Closing thread."
+time=2024-11-27T20:50:53.558+01:00 level=ERROR msg="Error: no such file or directory in path /etc/test3435. Closing thread."
