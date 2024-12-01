@@ -1,4 +1,6 @@
 log_path: "logs/application.log"
+log_level: debug
+log_format: text
 folders:
 - folder_path: "/home/janek/niestudia"
   important_files:
